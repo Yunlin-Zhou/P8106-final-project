@@ -291,6 +291,53 @@ model.qda <- train(heart_disease ~ .,
 model.qda$finalModel
 ```
 
+
+
+```{r}
+# SVM with Linear Kernel
+set.seed(1)
+svml.fit <- train(heart_disease ~ . , 
+                  data = train_df,
+                  method = "svmLinear",
+                  tuneGrid = data.frame(
+                    C = exp(seq(-7,2,len = 10))),
+                  metric = "ROC",
+                  trControl = ctrl)
+
+#svm linear cross-validation Plot
+plot(svml.fit, highlight = TRUE, xTrans = log) 
+#svm linear final model
+svml.fit$finalModel
+
+
+# SVM with Radial Kernel
+svmr.grid <- expand.grid(C = exp(seq(-2,3,len = 10)),
+                         sigma = exp(seq(-8,-1,len = 20)))
+set.seed(1)
+svmr.fit <- train(heart_disease ~ . , 
+                  data = train_df,
+                  method = "svmRadialSigma",
+                  tuneGrid = svmr.grid,
+                  metric = "ROC",
+                  trControl = ctrl)
+
+#svm radial cross-validation plot
+myCol <- rainbow(20)
+myPar <- list(superpose.symbol = list(col = myCol),
+              superpose.line = list(col = myCol))
+plot(svmr.fit, highlight = TRUE, par.settings = myPar)
+
+#svm radial final model
+svmr.fit$finalModel
+
+```
+
+
+
+
+
+
+
 ## Find the best model
 
 To find the best fitting model, we need to compare the models with their AUC . As the plot shows below, the MARS model has the largest AUC, so we choose MARS model as the best fitting model.
