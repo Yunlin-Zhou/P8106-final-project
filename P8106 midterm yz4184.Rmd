@@ -19,6 +19,8 @@ library(patchwork)
 library(MASS)
 library(klaR)
 library(GGally)
+library(rpart)
+library(rpart.plot)
 ```
 
 ```{r setup, include=FALSE}
@@ -180,7 +182,7 @@ As we can see from the plot above: male are tending to have the heart disease; i
 
 # Models
 
-Since our outcome is either having hear disease or not, we would use classification models including logistic regression, penalized logistic regression, GAM, MARS, LDA and QDA to train the data set. We use all the variables in the data set to fit the model.
+Since our outcome is either having hear disease or not, we would use classification models (including logistic regression, penalized logistic regression, GAM, MARS, LDA and QDA) with 10 fold validation to train the data set. We use all the variables in the data set to fit the model.
 
 ```{r, results='hide'}
 # logistic regression
@@ -257,9 +259,11 @@ model.mars <- train(heart_disease ~ .,
                                            nprune = 5:20),
                     metric = "ROC",
                     trControl = ctrl)
+
 ```
 
 For MARS model, the best tuning parameters are nprune = 11 and degree = 1. The plot below shows that the highest point is the best tuning parameter selection.
+
 
 ```{r, fig.height = 3}
 model.mars$bestTune
@@ -333,10 +337,33 @@ svmr.fit$finalModel
 ```
 
 
+## Regression Tree
+
+```{r}
+ctrl <- trainControl(method = "cv")
+
+set.seed(1)
+tree1 <- train(heart_disease ~ . , 
+                  data = train_df, 
+                   method = "rpart",
+                   tuneGrid = data.frame(cp = exp(seq(-6,-3, length = 50))),
+                   trControl = ctrl)
+tree1$bestTune
+ggplot(tree1, highlight = TRUE)
+```
+
+We tuned 50 values of Complexity Parameters (cp, the minimum improvement in the model needed at each node) from 𝑒−6 to 𝑒−3. The model with the slargest cross-validation accuracy is with cp `r tree1$bestTune`.
+
+###  Create a plot of the tree.
+
+```{r}
+rpart.plot(tree1$finalModel)
+```
 
 
+If the st_slope is flat and the patient is male, the probability of having heart disease is 47%.
 
-
+If the st_slope is up and the patient has the Asymptomatic type of chest pain, the probability of not having heart disease is 28%.
 
 ## Find the best model
 
@@ -395,10 +422,32 @@ grid.arrange(p_box, p_auc, ncol = 2)
 ## Feature Importance based on MARS model
 
 ```{r,fig.height = 4}
+model.mars$finalModel
+
 vip(model.mars$finalModel)
 ```
 
+In the MARS model, we tuned the maximum degree of interaction (degree) from 1 to 4 and the maximum number of terms (including intercept) in the pruned model (nprune) from 5 to 20. The best model with the smallest cross-validation RMSE is with nprune = 11 and degree = 1. The best model selected 11 of 19 terms, and 8 of 15 predictors. 
+
 According to the vip plot, we can conclude that st_slopeUp, chest_pain_typeASY, sexM, oldpeak, fasting_bshigh, cholesterol, st_slopeFlat, exercise_anginaN are statistically significant.
+
+
+##  PD plots
+
+```{r}
+p1 <- pdp::partial(model.mars, pred.var = c("cholesterol"), grid.resolution = 10) %>% autoplot()
+
+p2 <- pdp::partial(model.mars, pred.var = c("cholesterol", "oldpeak"),
+grid.resolution = 10) %>%
+pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE,
+screen = list(z = 20, x = -60))
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+To examine the marginal effects of predictors, we created a partial dependence plot for cholesterol and also an interaction PD plot for both cholesterol and oldpeak.
+
+
 
 # Conclusions
 
