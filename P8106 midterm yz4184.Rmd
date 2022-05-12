@@ -296,7 +296,7 @@ model.qda$finalModel
 ```
 
 
-
+## SVM with Linear Kernel
 ```{r}
 # SVM with Linear Kernel
 set.seed(1)
@@ -314,6 +314,11 @@ plot(svml.fit, highlight = TRUE, xTrans = log)
 svml.fit$finalModel
 
 
+```
+
+
+## SVM with Radial Kernel
+```{r}
 # SVM with Radial Kernel
 svmr.grid <- expand.grid(C = exp(seq(-2,3,len = 10)),
                          sigma = exp(seq(-8,-1,len = 20)))
@@ -333,37 +338,98 @@ plot(svmr.fit, highlight = TRUE, par.settings = myPar)
 
 #svm radial final model
 svmr.fit$finalModel
+```
 
+## Random Forest
+Under the random forest model, the Minimal Node Size with highest ROC curve with repeated cross-validation is 6. 
+
+```{r random forest}
+rf.grid <- expand.grid(mtry = 1:11,
+                       splitrule = "gini",
+                       min.node.size = seq(from = 2, to = 10, by = 2))
+set.seed(1)
+rf.fit <- train(heart_disease ~ . ,
+                dat,
+                subset = rowTrain,
+                method = "ranger",
+                tuneGrid = rf.grid,
+                metric = "ROC",
+                trControl = ctrl)
+
+ggplot(rf.fit, highlight = TRUE)
+
+#predict
+#AUC = 0.9461
+rf.pred <- predict(rf.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+rf.pred.class <- predict(rf.fit, newdata = dat[-rowTrain,], type = "raw")
+roc.rf <- roc(test_df$heart_disease, rf.pred)
+auc.rf <- c(roc.rf$auc[1])
+#Accuracy = 0.9018
+confusionMatrix(data = rf.pred.class,
+                reference = test_df$heart_disease)
+```
+
+## boosting
+For the adaboost model, the number of boosting iterations is 2000 and the maximum depth is 3.
+```{r boosting}
+gbmA.grid <- expand.grid(n.trees = c(2000,3000,4000,5000),
+                         interaction.depth = 1:6,
+                         shrinkage = c(0.0005,0.001,0.002),
+                         n.minobsinnode = 1)
+set.seed(1)
+gbmA.fit <- train(heart_disease ~ . ,
+                  dat,
+                  subset = rowTrain,
+                  tuneGrid = gbmA.grid,
+                  trControl = ctrl,
+                  method = "gbm",
+                  distribution = "adaboost",
+                  metric = "ROC",
+                  verbose = FALSE)
+
+ggplot(gbmA.fit, highlight = TRUE)
+summary(gbmA.fit$finalModel, las = 2, cBars = 11, cex.names = 0.6)
+
+#predict
+#AUC = 0.9418
+gbmA.pred <- predict(gbmA.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+gbmA.pred.class <- predict(gbmA.fit, newdata = dat[-rowTrain,], type = "raw")
+roc.gbmA <- roc(test_df$heart_disease, gbmA.pred)
+auc.gbmA <- c(roc.gbmA$auc[1])
+#Accuracy = 0.8655
+confusionMatrix(data = gbmA.pred.class,
+                reference = test_df$heart_disease)
 ```
 
 
-## Regression Tree
+
+## Classification Trees
 
 ```{r}
-ctrl <- trainControl(method = "cv")
+ctrl_tree <- trainControl(method = "repeatedcv", 
+                          summaryFunction = twoClassSummary, 
+                          classProbs = TRUE)
 
 set.seed(1)
-tree1 <- train(heart_disease ~ . , 
-                  data = train_df, 
-                   method = "rpart",
-                   tuneGrid = data.frame(cp = exp(seq(-6,-3, length = 50))),
-                   trControl = ctrl)
-tree1$bestTune
-ggplot(tree1, highlight = TRUE)
-```
 
-We tuned 50 values of Complexity Parameters (cp, the minimum improvement in the model needed at each node) from 𝑒−6 to 𝑒−3. The model with the slargest cross-validation accuracy is with cp `r tree1$bestTune`.
+rpart.fit <- train(heart_disease ~ . , 
+                  data = train_df, 
+               method = "rpart",
+tuneGrid = data.frame(cp = exp(seq(-8,-6, len = 50))),
+trControl = ctrl_tree,
+metric = "ROC")
+ggplot(rpart.fit, highlight = TRUE)
+
+rpart.fit$bestTune
+```
 
 ###  Create a plot of the tree.
 
 ```{r}
-rpart.plot(tree1$finalModel)
+rpart.plot(rpart.fit$finalModel)
 ```
 
 
-If the st_slope is flat and the patient is male, the probability of having heart disease is 47%.
-
-If the st_slope is up and the patient has the Asymptomatic type of chest pain, the probability of not having heart disease is 28%.
 
 ## Find the best model
 
@@ -375,13 +441,21 @@ res <- resamples(list(GGLM = model.glm,
                       GAM = model.gam,
                       MARS = model.mars,
                       LDA = model.lda,
-                      QDA = model.qda))
-summary(res)
+                      QDA = model.qda,
+                      SVM_Linear = svml.fit, 
+                      SVM_Radial = svmr.fit,
+                      Random_Forest = rf.fit,
+                      Boosting = gbmA.fit,
+                      Rpart = rpart.fit))
+
+ summary(res)
+
 ```
 
 
 ```{r, results='hide'}
 p_box = bwplot(res, metric = "ROC")
+p_box
 ```
 
 ```{r, results='hide'}
@@ -391,7 +465,11 @@ gam.pred <- predict(model.gam, newdata = test_df, type = "prob")[,2]
 mars.pred <- predict(model.mars, newdata = test_df, type = "prob")[,2]
 lda.pred <- predict(model.lda, newdata = test_df, type = "prob")[,2]
 qda.pred <- predict(model.qda, newdata = test_df, type = "prob")[,2]
-
+gbmA.pred <- predict(gbmA.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
+rf.pred <- predict(rf.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
+svml.pred <- predict(svml.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+svmr.pred <- predict(svmr.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+rpart.pred <- predict(rpart.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
 
 roc.glm <- roc(test_df$heart_disease, glm.pred)
 roc.glmn <- roc(test_df$heart_disease, glmn.pred)
@@ -399,18 +477,29 @@ roc.gam <- roc(test_df$heart_disease, gam.pred)
 roc.mars <- roc(test_df$heart_disease, mars.pred)
 roc.lda <- roc(test_df$heart_disease, lda.pred)
 roc.qda <- roc(test_df$heart_disease, qda.pred)
+roc.gbmA <- roc(test_df$heart_disease, gbmA.pred)
+roc.rf <- roc(test_df$heart_disease, rf.pred)
+roc.svml <- roc(test_df$heart_disease, svml.pred)
+roc.svmr <- roc(test_df$heart_disease, svmr.pred)
+roc.rpart <- roc(test_df$heart_disease, rpart.pred)
+
+
 
 auc <- c(roc.glm$auc[1], roc.glmn$auc[1], 
          roc.gam$auc[1], roc.mars$auc[1],
-         roc.lda$auc[1], roc.qda$auc[1])
+         roc.lda$auc[1], roc.qda$auc[1],
+         roc.gbmA$auc[1],roc.rf$auc[1],
+         roc.svml$auc[1],roc.svmr$auc[1],roc.rpart$auc[1])
 
-modelNames <- c("glm","glmn","gam","mars","lda", "qda")
+modelNames <- c("glm","glmn","gam","mars","lda", "qda","gmbA","rf","svml","svmr","rpart")
+
+
 ```
 
 
 ```{r, results='hide'}
-p_auc = ggroc(list(roc.glm, roc.glmn, roc.gam, roc.mars,roc.lda, roc.qda), legacy.axes = TRUE) + 
-  scale_color_discrete(labels = paste0(modelNames, " (", round(auc,3),")"),
+p_auc = ggroc(list(roc.glm, roc.glmn, roc.gam, roc.mars,roc.lda, roc.qda, roc.gbmA, roc.rf,roc.svml, roc.svmr, roc.rpart), legacy.axes = TRUE) + 
+  scale_color_discrete(labels = paste0(modelNames, " (", round(auc,4),")"),
                        name = "Models (AUC)") +
   geom_abline(intercept = 0, slope = 1, color = "grey")
 ```
@@ -419,36 +508,44 @@ p_auc = ggroc(list(roc.glm, roc.glmn, roc.gam, roc.mars,roc.lda, roc.qda), legac
 grid.arrange(p_box, p_auc, ncol = 2)
 ```
 
-## Feature Importance based on MARS model
+## Feature Importance based on Random Forest model
 
 ```{r,fig.height = 4}
-model.mars$finalModel
+library(ranger)
+set.seed(1)
+#impurity
+rf2.final.imp <- ranger(heart_disease ~ . , dat[rowTrain,],
+                        mtry = rf.fit$bestTune[[1]],
+                        splitrule = "gini",
+                        min.node.size = rf.fit$bestTune[[3]],
+                        importance = "impurity")
+barplot(sort(ranger::importance(rf2.final.imp), decreasing = FALSE),
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(8))
+#permutation
+rf2.final.perm <- ranger(heart_disease ~ . , dat[rowTrain,],
+                        mtry = rf.fit$bestTune[[1]],
+                        splitrule = "gini",
+                        min.node.size = rf.fit$bestTune[[3]],
+                        importance = "permutation")
 
-vip(model.mars$finalModel)
+barplot(sort(ranger::importance(rf2.final.perm), decreasing = FALSE),
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(8))
 ```
 
-In the MARS model, we tuned the maximum degree of interaction (degree) from 1 to 4 and the maximum number of terms (including intercept) in the pruned model (nprune) from 5 to 20. The best model with the smallest cross-validation RMSE is with nprune = 11 and degree = 1. The best model selected 11 of 19 terms, and 8 of 15 predictors. 
 
-According to the vip plot, we can conclude that st_slopeUp, chest_pain_typeASY, sexM, oldpeak, fasting_bshigh, cholesterol, st_slopeFlat, exercise_anginaN are statistically significant.
-
-
-##  PD plots
-
+## PDP plot
 ```{r}
-p1 <- pdp::partial(model.mars, pred.var = c("cholesterol"), grid.resolution = 10) %>% autoplot()
 
-p2 <- pdp::partial(model.mars, pred.var = c("cholesterol", "oldpeak"),
-grid.resolution = 10) %>%
-pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE,
-screen = list(z = 20, x = -60))
-
-grid.arrange(p1, p2, ncol = 2)
+pdp.rf.oldpeak <- rf.fit %>%
+  pdp::partial(pred.var = "oldpeak",
+          grid.resolution = 100,
+          prob = TRUE) %>%
+  autoplot(rug = TRUE, train = dat[rowTrain,]) +
+  ggtitle("Random forest")
+pdp.rf.oldpeak
 ```
 
-To examine the marginal effects of predictors, we created a partial dependence plot for cholesterol and also an interaction PD plot for both cholesterol and oldpeak.
 
 
-
-# Conclusions
-
-In the end, we choose the MARS model as our best fitting model because of its high sensitivity and specificity. When a patient has a up slope of the peak exercise ST segment, high old peak, high fasting blood sugar and cholesterol, we need to be more cautious since those features might suggest heart disease. Also, even though some patients have normal features, we might still need further test for accurate diagnoses.
