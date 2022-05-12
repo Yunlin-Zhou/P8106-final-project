@@ -1,9 +1,11 @@
 ---
-title: "P8106 Midterm Project"
-author: "Yunlin Zhou"
+title: "P8106 Final Project"
+author: "Yunlin Zhou; Jinghan Liu; Jiayao Sun"
 output:
   pdf_document:
     latex_engine: xelatex
+editor_options: 
+  chunk_output_type: console
 ---
 ```{r, echo = FALSE, message = FALSE, results='hide', warning=FALSE}
 library(ggplot2)
@@ -388,7 +390,6 @@ gbmA.fit <- train(heart_disease ~ . ,
                   verbose = FALSE)
 
 ggplot(gbmA.fit, highlight = TRUE)
-summary(gbmA.fit$finalModel, las = 2, cBars = 11, cex.names = 0.6)
 
 #predict
 #AUC = 0.9418
@@ -467,9 +468,9 @@ lda.pred <- predict(model.lda, newdata = test_df, type = "prob")[,2]
 qda.pred <- predict(model.qda, newdata = test_df, type = "prob")[,2]
 gbmA.pred <- predict(gbmA.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
 rf.pred <- predict(rf.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
-svml.pred <- predict(svml.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
-svmr.pred <- predict(svmr.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
-rpart.pred <- predict(rpart.fit, newdata = dat[-rowTrain,], type = "prob")[,1]
+svml.pred <- predict(svml.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
+svmr.pred <- predict(svmr.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
+rpart.pred <- predict(rpart.fit, newdata = dat[-rowTrain,], type = "prob")[,2]
 
 roc.glm <- roc(test_df$heart_disease, glm.pred)
 roc.glmn <- roc(test_df$heart_disease, glmn.pred)
